@@ -1,0 +1,78 @@
+- name: task1
+  hosts: tomcat1
+  vars:
+    tomcat_version: 8.5.50
+    java_version: 1.8.0
+
+  
+  tasks:
+    - name: Installing Java
+      become: yes
+      yum:
+        name: java-{{java_version}}-openjdk.x86_64
+
+    - name: Checking Java
+      shell: java -version
+      register: installed_java_version
+    
+    - debug:
+        msg: Java Version:{{ ''.join(installed_java_version.stderr | map('trim') | list )}}
+
+    - name: Add the user 'tomcat' 
+      become: yes
+      user:
+        name: tomcat
+        comment: tomcat user
+
+    - name: Another symbolic mode example, adding some permissions and removing others
+      become: yes
+      copy:
+        src: tomcat.service
+        dest: /etc/systemd/system/tomcat.service
+        owner: root
+        group: root
+
+    - name: Creates directory
+      become: yes
+      file:
+        path: /opt/tomcat
+        state: directory
+
+    - name: Creates working directory
+      become: yes
+      file:
+        path: /var/tomcat
+        state: directory
+        owner: tomcat
+        group: tomcat
+          
+    - name: Downloading and unarchive tomcat
+      become: yes
+      unarchive:
+        src: http://apache-mirror.rbc.ru/pub/apache/tomcat/tomcat-8/v8.5.50/bin/apache-tomcat-8.5.50.tar.gz
+        dest: /opt/tomcat
+        remote_src: yes
+        owner: tomcat
+        group: tomcat
+
+    - name: Extract
+      become: yes 
+      unarchive:
+        src: /opt/tomcat/apache-tomcat-{{tomcat_version}}/bin/commons-daemon-native.tar.gz
+        dest: /opt/tomcat/apache-tomcat-{{tomcat_version}}/bin/
+        remote_src: yes
+        owner: tomcat
+        group: tomcat
+             
+    - name: Installing Tomcat
+      become: yes
+      shell: |
+        export JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk-1.8.0.232.b09-0.el7_7.x86_64 
+        export CATALINA_HOME=/opt/tomcat/apache-tomcat-{{tomcat_version}}/
+        cd /opt/tomcat/apache-tomcat-{{tomcat_version}}/bin/commons-daemon-1.2.2-native-src/unix/
+        ./configure --with-os-type=include/linux
+        ./make
+        cp jsvc ../..
+        chown -R tomcat:tomcat /opt/tomcat
+        systemctl daemon-reload
+        systemctl start tomcat
